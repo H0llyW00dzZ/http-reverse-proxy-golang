@@ -7,13 +7,13 @@ on:
   push:
   # modify this branch
     branches:
-      - main
+      - master
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
   pull_request:
     branches:
-      - main
+      - master
     paths-ignore:
       - '**.md'
       - '.github/workflows/**'
