@@ -131,7 +131,7 @@ jobs:
         id: upload-Analysis_Result-sarif
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: ${{ runner.workspace }}/results/javascript.sarif
+          sarif_file: ${{ runner.workspace }}/results/${{ matrix.language }}.sarif
           category: "Analysis Result: ${{ matrix.language }}"
 
       # since it public everyone can see in artifact about Analysis Result
@@ -149,4 +149,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: Analysis_Result (SARIF + Encrypted)
-          path: ${{ runner.workspace }}/results/javascript.sarif.gpg
+          path: ${{ runner.workspace }}/results/${{ matrix.language }}.sarif.gpg
