@@ -2,10 +2,13 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -16,6 +19,7 @@ var (
 	maxRequestSize   int64
 	requestRateLimit float64
 	concurrencyLimit int
+	serverPort       int
 )
 
 func main() {
@@ -24,6 +28,7 @@ func main() {
 	flag.Int64Var(&maxRequestSize, "maxRequestSize", 10*1024*1024, "Maximum request size")
 	flag.Float64Var(&requestRateLimit, "requestRateLimit", 100, "Request rate limit (requests per second)")
 	flag.IntVar(&concurrencyLimit, "concurrencyLimit", 10, "Concurrency limit (maximum concurrent requests)")
+	flag.IntVar(&serverPort, "serverPort", 8080, "Server port")
 	flag.Parse()
 
 	// Create a new logger instance with the desired configuration.
@@ -34,6 +39,9 @@ func main() {
 
 	// Set the logger output to os.Stdout.
 	logger.SetOutput(os.Stdout)
+
+	// Log the starting of the HTTP server
+	logger.Info("Starting HTTP server ...")
 
 	// Create a rate limiter based on the request rate limit
 	requestRateLimiter := rate.NewLimiter(rate.Limit(requestRateLimit), concurrencyLimit)
@@ -61,10 +69,18 @@ func main() {
 	})
 
 	// Start the server.
-	logger.Info("Starting HTTP server ...")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		logger.Error(err)
-	}
+	go func() {
+		addr := fmt.Sprintf(":%d", serverPort)
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			logger.Error(err)
+		}
+	}()
+
+	// Log when the server has successfully started
+	logger.Infof("HTTP server started successfully on port %d", serverPort)
+
+	// Wait for a signal to exit
+	waitForExitSignal()
 }
 
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
@@ -88,4 +104,11 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 	// Proxy the request.
 	proxy.ServeHTTP(w, r)
+}
+
+func waitForExitSignal() {
+	// Wait for a signal to exit (e.g., Ctrl+C)
+	exitChan := make(chan os.Signal, 1)
+	signal.Notify(exitChan, os.Interrupt, syscall.SIGTERM)
+	<-exitChan
 }
