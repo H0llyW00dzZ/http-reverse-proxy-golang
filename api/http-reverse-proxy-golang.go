@@ -79,11 +79,9 @@ func main() {
 
 	// Create a server instance with custom settings
 	server := &http.Server{
-		Addr:         fmt.Sprintf(":%d", serverPort),
-		Handler:      nil, // Use default handler (Mux)
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+		Addr:      fmt.Sprintf(":%d", serverPort),
+		Handler:   nil, // Use default handler (Mux)
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
 	// Start the server with or without TLS
