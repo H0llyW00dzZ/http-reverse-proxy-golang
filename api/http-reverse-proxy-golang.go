@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
@@ -22,6 +23,8 @@ var (
 	concurrencyLimit int
 	serverPort       int
 	blockedPath      string
+	certFile         string
+	keyFile          string
 )
 
 func main() {
@@ -32,6 +35,8 @@ func main() {
 	flag.IntVar(&concurrencyLimit, "concurrencyLimit", 10, "Concurrency limit (maximum concurrent requests)")
 	flag.IntVar(&serverPort, "serverPort", 8080, "Server port")
 	flag.StringVar(&blockedPath, "blockedPath", "/api/gor00t", "Path to be blocked with a fake network response")
+	flag.StringVar(&certFile, "certFile", "", "Path to the TLS certificate file")
+	flag.StringVar(&keyFile, "keyFile", "", "Path to the TLS private key file")
 	flag.Parse()
 
 	// Create a new logger instance with the desired configuration.
@@ -72,16 +77,29 @@ func main() {
 		handleProxy(w, r, logger)
 	})
 
-	// Start the server.
-	go func() {
-		addr := fmt.Sprintf(":%d", serverPort)
-		if err := http.ListenAndServe(addr, nil); err != nil {
+	// Create a server instance with custom settings
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", serverPort),
+		Handler:      nil, // Use default handler (Mux)
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		TLSConfig:    &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+
+	// Start the server with or without TLS
+	if certFile != "" && keyFile != "" {
+		logger.Infof("HTTPS server started successfully on port %d", serverPort)
+		err := server.ListenAndServeTLS(certFile, keyFile)
+		if err != nil {
 			logger.Error(err)
 		}
-	}()
-
-	// Log when the server has successfully started
-	logger.Infof("HTTP server started successfully on port %d", serverPort)
+	} else {
+		logger.Infof("HTTP server started successfully on port %d", serverPort)
+		err := server.ListenAndServe()
+		if err != nil {
+			logger.Error(err)
+		}
+	}
 
 	// Wait for a signal to exit
 	waitForExitSignal()
