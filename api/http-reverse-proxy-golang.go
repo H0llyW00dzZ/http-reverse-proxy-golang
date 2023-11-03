@@ -56,6 +56,7 @@ func main() {
 
 		// Check if the request rate exceeds the limit
 		if !requestRateLimiter.Allow() {
+			logger.Warnf("[Visitor] Request rate limit exceeded (User-Agent: %s)", r.UserAgent())
 			http.Error(w, "Request rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
@@ -84,7 +85,7 @@ func main() {
 }
 
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
-	logger.Infof("Received request: %s %s", r.Method, r.URL.Path)
+	logger.Infof("[Visitor] : Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
 
 	// Add your custom logic here to send a fake network response to the client
 	// when there is an incoming connection from the client.
