@@ -89,7 +89,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 	// Add your custom logic here to send a fake network response to the client
 	// when there is an incoming connection from the client.
-	if r.Method == http.MethodGet && r.URL.Path == "/api/" {
+	if r.Method == http.MethodGet && r.URL.Path == "/api/" && r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "" {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hello, visitor! This is from Golang."))
 		return
