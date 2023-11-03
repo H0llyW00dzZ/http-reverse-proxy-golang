@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
@@ -20,6 +21,7 @@ var (
 	requestRateLimit float64
 	concurrencyLimit int
 	serverPort       int
+	blockedPath      string
 )
 
 func main() {
@@ -29,6 +31,7 @@ func main() {
 	flag.Float64Var(&requestRateLimit, "requestRateLimit", 100, "Request rate limit (requests per second)")
 	flag.IntVar(&concurrencyLimit, "concurrencyLimit", 10, "Concurrency limit (maximum concurrent requests)")
 	flag.IntVar(&serverPort, "serverPort", 8080, "Server port")
+	flag.StringVar(&blockedPath, "blockedPath", "/api/gor00t", "Path to be blocked with a fake network response")
 	flag.Parse()
 
 	// Create a new logger instance with the desired configuration.
@@ -89,9 +92,39 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 	// Add your custom logic here to send a fake network response to the client
 	// when there is an incoming connection from the client.
-	if r.Method == http.MethodGet && r.URL.Path == "/api/" && r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "" {
+	if r.Method == http.MethodGet && r.URL.Path == blockedPath && (r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "") {
+		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, visitor! This is from Golang."))
+		// Define the binary animation frames
+		frames := []string{
+			"Hello ",
+			"visitor! ",
+			"This is from Golang.\n",
+			"00000000 ",
+			"10000000 ",
+			"11000000 ",
+			"11100000\n",
+			"11110000 ",
+			"11111000 ",
+			"11111100 ",
+			"11111110\n",
+			"11111111 ",
+			"11111110 ",
+			"11111100 ",
+			"11111000\n",
+			"11110000 ",
+			"11100000 ",
+			"11000000 ",
+			"10000000 ",
+		}
+
+		// Send the frames in a loop with a delay between each iteration
+		for _, frame := range frames {
+			time.Sleep(200 * time.Millisecond) // Adjust the delay as needed
+			w.Write([]byte(frame))
+			w.(http.Flusher).Flush()
+		}
+
 		return
 	}
 
