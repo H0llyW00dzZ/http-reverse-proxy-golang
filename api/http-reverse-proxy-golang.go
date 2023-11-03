@@ -86,6 +86,14 @@ func main() {
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
 	logger.Infof("Received request: %s %s", r.Method, r.URL.Path)
 
+	// Add your custom logic here to send a fake network response to the client
+	// when there is an incoming connection from the client.
+	if r.Method == http.MethodGet && r.URL.Path == "/api/" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Hello, visitor! This is from Golang."))
+		return
+	}
+
 	// Create a new reverse proxy.
 	proxyURL, err := url.Parse(apiTargetURL)
 	if err != nil {
