@@ -108,37 +108,45 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 	// Add your custom logic here to send a fake network response to the client
 	// when there is an incoming connection from the client.
-	if r.Method == http.MethodGet && r.URL.Path == blockedPath && (r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "") {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		// Define the binary animation frames
-		frames := []string{
-			"Hello ",
-			"visitor! ",
-			"This is from Golang.\n",
-			"00000000 ",
-			"10000000 ",
-			"11000000 ",
-			"11100000\n",
-			"11110000 ",
-			"11111000 ",
-			"11111100 ",
-			"11111110\n",
-			"11111111 ",
-			"11111110 ",
-			"11111100 ",
-			"11111000\n",
-			"11110000 ",
-			"11100000 ",
-			"11000000 ",
-			"10000000 ",
-		}
+	if r.URL.Path == blockedPath && (r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "") {
+		switch r.Method {
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			// Define the binary animation frames
+			frames := []string{
+				"Hello ",
+				"visitor! ",
+				"This is from Golang.\n",
+				"00000000 ",
+				"10000000 ",
+				"11000000 ",
+				"11100000\n",
+				"11110000 ",
+				"11111000 ",
+				"11111100 ",
+				"11111110\n",
+				"11111111 ",
+				"11111110 ",
+				"11111100 ",
+				"11111000\n",
+				"11110000 ",
+				"11100000 ",
+				"11000000 ",
+				"10000000 ",
+			}
 
-		// Send the frames in a loop with a delay between each iteration
-		for _, frame := range frames {
-			time.Sleep(200 * time.Millisecond) // Adjust the delay as needed
-			w.Write([]byte(frame))
-			w.(http.Flusher).Flush()
+			// Send the frames in a loop with a delay between each iteration
+			for _, frame := range frames {
+				time.Sleep(200 * time.Millisecond) // Adjust the delay as needed
+				w.Write([]byte(frame))
+				w.(http.Flusher).Flush()
+			}
+
+		default:
+			// For other methods, return a method not allowed error 🏴‍☠️
+			logger.Warnf("[Visitor] : Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 
 		return
