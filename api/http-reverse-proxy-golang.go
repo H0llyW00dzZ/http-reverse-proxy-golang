@@ -30,6 +30,7 @@ var (
 func main() {
 	// Parse command-line flags
 	flag.StringVar(&apiTargetURL, "apiTargetURL", "https://api.github.com", "API target URL")
+	// Example : 10*1024*1024 = 10 megabytes
 	flag.Int64Var(&maxRequestSize, "maxRequestSize", 10*1024*1024, "Maximum request size")
 	flag.Float64Var(&requestRateLimit, "requestRateLimit", 100, "Request rate limit (requests per second)")
 	flag.IntVar(&concurrencyLimit, "concurrencyLimit", 10, "Concurrency limit (maximum concurrent requests)")
@@ -58,7 +59,7 @@ func main() {
 	concurrencyLimiter := make(chan struct{}, concurrencyLimit)
 
 	// The API will be proxied to the specified target URL.
-	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		// Set the maximum request size limit
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
@@ -86,13 +87,13 @@ func main() {
 
 	// Start the server with or without TLS
 	if certFile != "" && keyFile != "" {
-		logger.Infof("HTTPS server started successfully on port %d", serverPort)
+		logger.Infof("HTTPS server started successfully on port %d with rate limit %.2f, concurrency limit %d, max request size %d, and API target URL %s", serverPort, requestRateLimit, concurrencyLimit, maxRequestSize, apiTargetURL)
 		err := server.ListenAndServeTLS(certFile, keyFile)
 		if err != nil {
 			logger.Error(err)
 		}
 	} else {
-		logger.Infof("HTTP server started successfully on port %d", serverPort)
+		logger.Infof("HTTP server started successfully on port %d with rate limit %.2f, concurrency limit %d, max request size %d, and API target URL %s", serverPort, requestRateLimit, concurrencyLimit, maxRequestSize, apiTargetURL)
 		err := server.ListenAndServe()
 		if err != nil {
 			logger.Error(err)
@@ -104,7 +105,7 @@ func main() {
 }
 
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
-	logger.Infof("[Visitor] : Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+	logger.Infof("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
 
 	// Add your custom logic here to send a fake network response to the client
 	// when there is an incoming connection from the client.
@@ -145,7 +146,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 		default:
 			// For other methods, return a method not allowed error 🏴‍☠️
-			logger.Warnf("[Visitor] : Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+			logger.Warnf("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 
@@ -161,7 +162,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 	proxy := httputil.NewSingleHostReverseProxy(proxyURL)
 
 	// Modify the request's URL to remove the "/api" prefix.
-	r.URL.Path = r.URL.Path[len("/api"):]
+	r.URL.Path = r.URL.Path[len("/api/v1"):]
 
 	// Set the necessary headers for the proxy.
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
