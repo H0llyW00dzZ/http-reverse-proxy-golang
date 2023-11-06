@@ -59,7 +59,7 @@ func main() {
 	concurrencyLimiter := make(chan struct{}, concurrencyLimit)
 
 	// The API will be proxied to the specified target URL.
-	http.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		// Set the maximum request size limit
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
@@ -162,7 +162,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 	proxy := httputil.NewSingleHostReverseProxy(proxyURL)
 
 	// Modify the request's URL to remove the "/api" prefix.
-	r.URL.Path = r.URL.Path[len("/api/v1"):]
+	r.URL.Path = r.URL.Path[len("/api"):]
 
 	// Set the necessary headers for the proxy.
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
