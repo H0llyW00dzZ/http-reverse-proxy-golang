@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// Define global variables to store command-line arguments.
 var (
 	apiTargetURL     string
 	maxRequestSize   int64
@@ -28,14 +31,14 @@ var (
 )
 
 func main() {
-	// Parse command-line flags
+	// Parse command-line flags to configure the server.
 	flag.StringVar(&apiTargetURL, "apiTargetURL", "https://api.github.com", "API target URL")
 	// Example : 10*1024*1024 = 10 megabytes
 	flag.Int64Var(&maxRequestSize, "maxRequestSize", 10*1024*1024, "Maximum request size")
 	flag.Float64Var(&requestRateLimit, "requestRateLimit", 100, "Request rate limit (requests per second)")
 	flag.IntVar(&concurrencyLimit, "concurrencyLimit", 10, "Concurrency limit (maximum concurrent requests)")
 	flag.IntVar(&serverPort, "serverPort", 8080, "Server port")
-	flag.StringVar(&blockedPath, "blockedPath", "/api/gor00t", "Path to be blocked with a fake network response")
+	flag.StringVar(&blockedPath, "blockedPath", "gor00t", "Path to be blocked with a fake network response")
 	flag.StringVar(&certFile, "certFile", "", "Path to the TLS certificate file")
 	flag.StringVar(&keyFile, "keyFile", "", "Path to the TLS private key file")
 	flag.Parse()
@@ -49,69 +52,68 @@ func main() {
 	// Set the logger output to os.Stdout.
 	logger.SetOutput(os.Stdout)
 
-	// Log the starting of the HTTP server
-	logger.Info("Starting HTTP server ...")
-
-	// Create a rate limiter based on the request rate limit
+	// Initialize rate limiter and concurrency limiter based on command-line arguments.
 	requestRateLimiter := rate.NewLimiter(rate.Limit(requestRateLimit), concurrencyLimit)
-
-	// Create a semaphore for concurrency limiting
 	concurrencyLimiter := make(chan struct{}, concurrencyLimit)
 
-	// The API will be proxied to the specified target URL.
+	// Set up the HTTP handler for the proxy functionality.
 	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		// Set the maximum request size limit
+		// Limit the maximum request size.
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
-		// Check if the request rate exceeds the limit
+		// Check if the request exceeds the rate limit.
 		if !requestRateLimiter.Allow() {
 			logger.Warnf("[Visitor] Request rate limit exceeded (User-Agent: %s)", r.UserAgent())
 			http.Error(w, "Request rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 
-		// Acquire a semaphore slot
+		// Acquire a concurrency limiter slot.
 		concurrencyLimiter <- struct{}{}
 		defer func() { <-concurrencyLimiter }()
 
-		// Handle the request
+		// Handle the request by either blocking it or proxying it.
 		handleProxy(w, r, logger)
 	})
 
-	// Create a server instance with custom settings
+	// Create a new HTTP server instance with custom TLS settings.
 	server := &http.Server{
 		Addr:      fmt.Sprintf(":%d", serverPort),
-		Handler:   nil, // Use default handler (Mux)
+		Handler:   nil, // Default ServeMux is used.
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
-	// Start the server with or without TLS
-	if certFile != "" && keyFile != "" {
-		logger.Infof("HTTPS server started successfully on port %d with rate limit %.2f, concurrency limit %d, max request size %d, and API target URL %s", serverPort, requestRateLimit, concurrencyLimit, maxRequestSize, apiTargetURL)
-		err := server.ListenAndServeTLS(certFile, keyFile)
-		if err != nil {
-			logger.Error(err)
+	// Start the server in a new goroutine, allowing the main goroutine to listen for exit signals.
+	go func() {
+		if certFile != "" && keyFile != "" {
+			logger.Infof("HTTPS server starting on port %d...", serverPort)
+			err := server.ListenAndServeTLS(certFile, keyFile)
+			if err != nil && err != http.ErrServerClosed {
+				logger.Fatal(err)
+			}
+		} else {
+			logger.Infof("HTTP server starting on port %d...", serverPort)
+			err := server.ListenAndServe()
+			if err != nil && err != http.ErrServerClosed {
+				logger.Fatal(err)
+			}
 		}
-	} else {
-		logger.Infof("HTTP server started successfully on port %d with rate limit %.2f, concurrency limit %d, max request size %d, and API target URL %s", serverPort, requestRateLimit, concurrencyLimit, maxRequestSize, apiTargetURL)
-		err := server.ListenAndServe()
-		if err != nil {
-			logger.Error(err)
-		}
-	}
+	}()
 
-	// Wait for a signal to exit
-	waitForExitSignal()
+	// Block the main goroutine until an exit signal is received, then gracefully shut down the server.
+	waitForExitSignal(server, logger)
 }
 
+// handleProxy decides whether to block the request or to proxy it to the target URL.
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
 	logger.Infof("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
 
-	// Add your custom logic here to send a fake network response to the client
-	// when there is an incoming connection from the client.
-	if r.URL.Path == blockedPath && (r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "") {
+	// Check if the request path matches the blocked path and lacks CORS headers.
+	if strings.TrimPrefix(r.URL.Path, "/api/") == blockedPath && r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "" {
+		// Handle the blocked path with a custom response.
 		switch r.Method {
 		case http.MethodGet:
+			// Send a stream of frames as a response.
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			// Define the binary animation frames
@@ -139,43 +141,51 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 
 			// Send the frames in a loop with a delay between each iteration
 			for _, frame := range frames {
-				time.Sleep(200 * time.Millisecond) // Adjust the delay as needed
-				w.Write([]byte(frame))
-				w.(http.Flusher).Flush()
+				time.Sleep(200 * time.Millisecond)
+				if _, err := w.Write([]byte(frame)); err != nil {
+					return // Stop if we cannot write to the response.
+				}
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
 			}
-
 		default:
-			// For other methods, return a method not allowed error 🏴‍☠️
-			logger.Warnf("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+			// Block non-GET methods. 🏴‍☠️
+			logger.Warnf("[Visitor] Method not allowed for path: %s (User-Agent: %s)", r.URL.Path, r.UserAgent())
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-
 		return
 	}
 
-	// Create a new reverse proxy.
+	// If the request is not blocked, create a reverse proxy to the target URL.
 	proxyURL, err := url.Parse(apiTargetURL)
 	if err != nil {
 		http.Error(w, "Failed to parse target URL", http.StatusInternalServerError)
 		return
 	}
 	proxy := httputil.NewSingleHostReverseProxy(proxyURL)
-
-	// Modify the request's URL to remove the "/api" prefix.
-	r.URL.Path = r.URL.Path[len("/api"):]
-
-	// Set the necessary headers for the proxy.
+	r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/")
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
 	r.Header.Set("X-Forwarded-For", r.RemoteAddr)
 	r.Host = proxyURL.Host
-
-	// Proxy the request.
 	proxy.ServeHTTP(w, r)
 }
 
-func waitForExitSignal() {
-	// Wait for a signal to exit (e.g., Ctrl+C)
+// waitForExitSignal listens for OS signals and triggers a graceful shutdown of the server.
+func waitForExitSignal(server *http.Server, logger *logrus.Logger) {
 	exitChan := make(chan os.Signal, 1)
 	signal.Notify(exitChan, os.Interrupt, syscall.SIGTERM)
 	<-exitChan
+
+	// Create a context with a timeout for the server shutdown.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Attempt to gracefully shut down the server.
+	logger.Info("Shutting down server...")
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Errorf("Server shutdown error: %v", err)
+	} else {
+		logger.Info("Server gracefully stopped")
+	}
 }
