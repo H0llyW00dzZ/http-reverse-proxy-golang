@@ -28,6 +28,7 @@ var (
 	blockedPath      string
 	certFile         string
 	keyFile          string
+	allowedMethods   string
 )
 
 func main() {
@@ -41,6 +42,8 @@ func main() {
 	flag.StringVar(&blockedPath, "blockedPath", "gor00t", "Path to be blocked with a fake network response")
 	flag.StringVar(&certFile, "certFile", "", "Path to the TLS certificate file")
 	flag.StringVar(&keyFile, "keyFile", "", "Path to the TLS private key file")
+	// eg Usage : -allowedMethods="GET,POST,PUT,DELETE"
+	flag.StringVar(&allowedMethods, "allowedMethods", "GET, POST, OPTIONS", "Allowed HTTP methods for CORS requests")
 	flag.Parse()
 
 	// Create a new logger instance with the desired configuration.
@@ -110,6 +113,14 @@ func main() {
 // handleProxy decides whether to block the request or to proxy it to the target URL.
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
 	logger.Infof("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+
+	// Handle CORS requests for all paths.
+	if r.Header.Get("Origin") != "" {
+		// Set CORS headers.
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", allowedMethods)
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	}
 
 	// Check if the request path matches the blocked path and lacks CORS headers.
 	if strings.TrimPrefix(r.URL.Path, "/api/") == blockedPath && r.Header.Get("no-cors") == "" && r.Header.Get("cors") == "" {
