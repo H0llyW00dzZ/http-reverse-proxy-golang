@@ -1,4 +1,4 @@
-module http-reverse-proxy-golang
+module go-proxy-golang
 
 go 1.21.3
 

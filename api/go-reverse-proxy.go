@@ -72,6 +72,9 @@ func main() {
 		concurrencyLimiter <- struct{}{}
 		defer func() { <-concurrencyLimiter }()
 
+		// Log the incoming request.
+		logger.Infof("[Middleware] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+
 		// Handle the request by either blocking it or proxying it.
 		handleProxy(w, r, logger)
 	})
