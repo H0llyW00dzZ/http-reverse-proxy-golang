@@ -146,6 +146,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 			for _, frame := range frames {
 				time.Sleep(200 * time.Millisecond)
 				if _, err := w.Write([]byte(frame)); err != nil {
+					logger.Errorf("[Visitor] Error writing response: %v", err)
 					return // Stop if we cannot write to the response.
 				}
 				if flusher, ok := w.(http.Flusher); ok {
@@ -163,6 +164,7 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 	// If the request is not blocked, create a reverse proxy to the target URL.
 	proxyURL, err := url.Parse(apiTargetURL)
 	if err != nil {
+		logger.Errorf("[Visitor] Failed to parse target URL: %v", err)
 		http.Error(w, "Failed to parse target URL", http.StatusInternalServerError)
 		return
 	}
