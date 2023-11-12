@@ -41,6 +41,31 @@ func main() {
 	flag.StringVar(&blockedPath, "blockedPath", "gor00t", "Path to be blocked with a fake network response")
 	flag.StringVar(&certFile, "certFile", "", "Path to the TLS certificate file")
 	flag.StringVar(&keyFile, "keyFile", "", "Path to the TLS private key file")
+
+	// Customize usage message and descriptions for each flag.
+	// Output
+	// Example Usage: go run api/go-reverse-proxy.go -h  [options]
+	// Options:
+	//  -apiTargetURL=https://api.github.com: API target URL (default: https://api.github.com)
+	//  -maxRequestSize=10485760: Maximum request size (default: 10485760)
+	//  -requestRateLimit=100: Request rate limit (requests per second) (default: 100)
+	//  -concurrencyLimit=10: Concurrency limit (maximum concurrent requests) (default: 10)
+	//  -serverPort=8080: Server port (default: 8080)
+	//  -blockedPath=gor00t: Path to be blocked with a fake network response (default: gor00t)
+	//  -certFile=: Path to the TLS certificate file (default: )
+	//  -keyFile=: Path to the TLS private key file (default: )
+
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		fmt.Fprintln(os.Stderr, "Options:")
+		flag.VisitAll(func(f *flag.Flag) {
+			fmt.Fprintf(os.Stderr, "  -%s=%s: %s (default: %s)\n", f.Name, f.DefValue, f.Usage, f.Value.String())
+		})
+
+		// Additional note regarding the TLS certificate (HTTPS).
+		fmt.Fprintln(os.Stderr, "Additional note regarding the TLS certificate (also known as HTTPS): if the default is being used, this reverse proxy will operate without HTTPS.")
+	}
+
 	flag.Parse()
 
 	// Create a new logger instance with the desired configuration.
