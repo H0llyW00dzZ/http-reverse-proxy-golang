@@ -56,14 +56,14 @@ func main() {
 	//  -keyFile=: Path to the TLS private key file (default: )
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
-		fmt.Fprintln(os.Stderr, "Options:")
+		fmt.Fprintf(os.Stdout, "Usage: %s [options]\n", os.Args[0])
+		fmt.Fprintln(os.Stdout, "Options:")
 		flag.VisitAll(func(f *flag.Flag) {
-			fmt.Fprintf(os.Stderr, "  -%s=%s: %s (default: %s)\n", f.Name, f.DefValue, f.Usage, f.Value.String())
+			fmt.Fprintf(os.Stdout, "  -%s=%s: %s (default: %s)\n", f.Name, f.DefValue, f.Usage, f.Value.String())
 		})
 
 		// Additional note regarding the TLS certificate (HTTPS).
-		fmt.Fprintln(os.Stderr, "Additional note regarding the TLS certificate (also known as HTTPS): if the default is being used, this reverse proxy will operate without HTTPS.")
+		fmt.Fprintln(os.Stdout, "Additional note regarding the TLS certificate (also known as HTTPS): if the default is being used, this reverse proxy will operate without HTTPS.")
 	}
 
 	flag.Parse()
@@ -82,7 +82,7 @@ func main() {
 	concurrencyLimiter := make(chan struct{}, concurrencyLimit)
 
 	// Set up the HTTP handler for the proxy functionality.
-	http.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/api/", loggingMiddleware(logger, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Limit the maximum request size.
 		r.Body = http.MaxBytesReader(w, r.Body, maxRequestSize)
 
@@ -98,11 +98,11 @@ func main() {
 		defer func() { <-concurrencyLimiter }()
 
 		// Log the incoming request.
-		logger.Infof("[Middleware] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+		logger.Infof("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
 
 		// Handle the request by either blocking it or proxying it.
 		handleProxy(w, r, logger)
-	})
+	})))
 
 	// Create a new HTTP server instance with custom TLS settings.
 	server := &http.Server{
@@ -132,6 +132,14 @@ func main() {
 	waitForExitSignal(server, logger)
 }
 
+// loggingMiddleware logs incoming requests.
+func loggingMiddleware(logger *logrus.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Infof("[Middleware] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
+		next.ServeHTTP(w, r)
+	})
+}
+
 // handleProxy decides whether to block the request or to proxy it to the target URL.
 func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) {
 	logger.Infof("[Visitor] Received request: %s %s (User-Agent: %s)", r.Method, r.URL.Path, r.UserAgent())
@@ -143,6 +151,8 @@ func handleProxy(w http.ResponseWriter, r *http.Request, logger *logrus.Logger) 
 		case http.MethodGet:
 			// Send a stream of frames as a response.
 			w.Header().Set("Content-Type", "text/event-stream")
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET")
 			w.WriteHeader(http.StatusOK)
 			// Define the binary animation frames
 			frames := []string{
