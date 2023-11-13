@@ -15,13 +15,13 @@ RUN go mod download
 COPY . .
 
 # Build the binary.
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o /go/bin/http-reverse-proxy-golang
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=readonly -v -o /go/bin/go-reverse-proxy
 
-# Use the Google Distroless image for a minimal container.
-FROM gcr.io/distroless/static
+# Use a minimal base image for the final container.
+FROM scratch
 
 # Copy the binary to the production image from the builder stage.
-COPY --from=builder /go/bin/http-reverse-proxy-golang /
+COPY --from=builder /go/bin/go-reverse-proxy /
 
 # Run the binary on container startup.
-CMD ["/http-reverse-proxy-golang"]
+CMD ["/go-reverse-proxy"]
