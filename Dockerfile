@@ -4,8 +4,7 @@
 FROM golang:1.21.3 as builder
 
 # Create and change to the app directory.
-#weird dir location
-#WORKDIR /api
+WORKDIR /app
 
 # Retrieve application dependencies.
 # This allows the container build to reuse cached dependencies.
